@@ -93,12 +93,13 @@ struct NeonAPIClient: Sendable {
         return RawAccountConsumption(periods: response.periods)
     }
 
-    // MARK: - Project names: GET /api/v2/projects
+    // MARK: - Projects list: GET /api/v2/projects (all plans)
+    // Returns project names + current billing-period usage metrics.
 
-    func fetchProjectNames(apiKey: String) async throws -> [String: String] {
+    func fetchProjects(apiKey: String) async throws -> [NeonProject] {
         let url = URL(string: "\(Self.base)/projects")!
         let response = try await get(url: url, apiKey: apiKey, as: ProjectsListResponse.self)
-        return Dictionary(uniqueKeysWithValues: response.projects.map { ($0.id, $0.name) })
+        return response.projects
     }
 
     // MARK: - Generic GET
@@ -119,6 +120,9 @@ struct NeonAPIClient: Sendable {
         }
         guard (200..<300).contains(http.statusCode) else {
             let body = String(data: data, encoding: .utf8) ?? ""
+            if http.statusCode == 403 {
+                throw APIError.forbidden(body)
+            }
             throw APIError.http(http.statusCode, body)
         }
 
@@ -130,15 +134,31 @@ struct NeonAPIClient: Sendable {
 
 enum APIError: LocalizedError {
     case invalidResponse
+    case forbidden(String)   // 403 — plan restriction or permission issue
     case http(Int, String)
 
     var errorDescription: String? {
         switch self {
         case .invalidResponse:
             return "Invalid server response"
+        case .forbidden(let body):
+            // Extract the Neon message field if present
+            if let data = body.data(using: .utf8),
+               let json = try? JSONDecoder().decode([String: String].self, from: data),
+               let msg = json["message"] {
+                return msg
+            }
+            return "Access denied (403)"
         case .http(let code, let body):
-            let hint = body.isEmpty ? "" : ": \(body.prefix(120))"
+            let hint = body.isEmpty ? "" : ": \(body.prefix(400))"
             return "HTTP \(code)\(hint)"
         }
+    }
+}
+
+extension APIError {
+    var isForbidden: Bool {
+        if case .forbidden = self { return true }
+        return false
     }
 }
