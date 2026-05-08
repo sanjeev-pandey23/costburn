@@ -1,0 +1,21 @@
+# Swift / SwiftPM
+.build/
+Package.resolved
+*.xcworkspace
+*.xcuserdata
+*.xcodeproj
+
+# macOS
+.DS_Store
+**/.DS_Store
+
+# Environment / secrets
+.env
+.env.*
+
+# Claude Code
+.claude/
+
+# Derived / temp
+tap-repo/
+/tmp/
