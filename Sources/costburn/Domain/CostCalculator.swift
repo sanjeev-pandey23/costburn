@@ -83,6 +83,24 @@ struct CostCalculator: Sendable {
         )
     }
 
+    /// Builds from GET /api/v2/projects response — works on all Neon plans.
+    func buildProjectConsumptionFromProject(_ project: NeonProject) -> ProjectConsumption {
+        let cuSeconds  = project.computeTimeSeconds   ?? 0
+        let byteHours  = project.dataStorageBytesHour ?? 0
+        let transBytes = project.dataTransferBytes    ?? 0
+
+        return ProjectConsumption(
+            projectID:      project.id,
+            projectName:    project.name,
+            computeHours:   cuHours(from: cuSeconds),
+            storageGBMonth: gbMonths(from: byteHours),
+            transferGB:     gb(from: transBytes),
+            computeCost:    computeCost(cuSeconds: cuSeconds),
+            storageCost:    storageCost(byteHours: byteHours),
+            transferCost:   transferCost(bytes: transBytes)
+        )
+    }
+
     func buildAccountSummary(_ raw: RawAccountConsumption) -> AccountSummary {
         var totalCU: Double = 0
         var totalRootBytes: Double = 0

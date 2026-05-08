@@ -145,10 +145,19 @@ struct PopoverView: View {
                     .font(.system(size: 10))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
-            } else if let updated = appState.lastUpdated {
-                Text("Updated \(updated, style: .relative) ago")
-                    .font(.system(size: 10))
-                    .foregroundStyle(.secondary)
+            } else {
+                VStack(alignment: .leading, spacing: 1) {
+                    if let updated = appState.lastUpdated {
+                        Text("Updated \(updated, style: .relative) ago")
+                            .font(.system(size: 10))
+                            .foregroundStyle(.secondary)
+                    }
+                    if let note = appState.planNote {
+                        Text(note)
+                            .font(.system(size: 10))
+                            .foregroundStyle(.orange)
+                    }
+                }
             }
             Spacer()
             Button {

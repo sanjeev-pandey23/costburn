@@ -64,6 +64,7 @@ struct Pagination: Decodable, Sendable {
 }
 
 // MARK: - Projects list: GET /api/v2/projects
+// Available on all plans. Each project carries current billing-period usage.
 
 struct ProjectsListResponse: Decodable, Sendable {
     let projects: [NeonProject]
@@ -72,4 +73,16 @@ struct ProjectsListResponse: Decodable, Sendable {
 struct NeonProject: Decodable, Sendable {
     let id: String
     let name: String
+    // Current billing-period usage (all plans)
+    let computeTimeSeconds: Double?
+    let dataStorageBytesHour: Double?
+    let dataTransferBytes: Double?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case name
+        case computeTimeSeconds  = "compute_time_seconds"
+        case dataStorageBytesHour = "data_storage_bytes_hour"
+        case dataTransferBytes   = "data_transfer_bytes"
+    }
 }
