@@ -73,16 +73,19 @@ struct ProjectsListResponse: Decodable, Sendable {
 struct NeonProject: Decodable, Sendable {
     let id: String
     let name: String
-    // Current billing-period usage (all plans)
-    let computeTimeSeconds: Double?
-    let dataStorageBytesHour: Double?
-    let dataTransferBytes: Double?
+    // Compute: CU-seconds used in current billing period
+    let cpuUsedSec: Double?
+    // Storage: current live database size in bytes (instantaneous snapshot, NOT byte-hours)
+    // Multiply by hours elapsed in billing period to get byte-hours
+    let syntheticStorageSize: Double?
+    // Billing period next reset — used to derive period start (reset - 1 month)
+    let quotaResetAt: Date?
 
     enum CodingKeys: String, CodingKey {
         case id
         case name
-        case computeTimeSeconds  = "compute_time_seconds"
-        case dataStorageBytesHour = "data_storage_bytes_hour"
-        case dataTransferBytes   = "data_transfer_bytes"
+        case cpuUsedSec          = "cpu_used_sec"
+        case syntheticStorageSize = "synthetic_storage_size"
+        case quotaResetAt        = "quota_reset_at"
     }
 }

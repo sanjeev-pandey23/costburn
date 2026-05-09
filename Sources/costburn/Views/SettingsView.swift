@@ -82,9 +82,9 @@ struct SettingsView: View {
                             if pricingTier == .custom {
                                 Divider().padding(.vertical, 2)
                                 label("Custom rates (leave blank to use defaults)")
-                                rateField("Compute ($/CU-hour)", binding: $customComputeRate, placeholder: "0.0255")
-                                rateField("Storage ($/GB-month)", binding: $customStorageRate, placeholder: "0.1195")
-                                rateField("Egress ($/GB)", binding: $customTransferRate, placeholder: "0.09")
+                                rateField("Compute ($/CU-hour)", binding: $customComputeRate, placeholder: "0.106")
+                                rateField("Storage ($/GB-month)", binding: $customStorageRate, placeholder: "0.35")
+                                rateField("Egress ($/GB)", binding: $customTransferRate, placeholder: "0.10")
                             } else {
                                 let rates = pricingTier.rates
                                 HStack(spacing: 16) {

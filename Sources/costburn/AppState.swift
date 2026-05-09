@@ -12,8 +12,6 @@ final class AppState {
     var lastError: String? = nil
     var lastUpdated: Date? = nil
     var selectedPeriod: Period = .month
-    /// Non-nil when the app fell back to a lower-fidelity data source.
-    var planNote: String? = nil
 
     // MARK: - Computed
 
@@ -121,13 +119,11 @@ final class AppState {
                         .reduce(into: [String: String]()) { $0[$1.id] = $1.name }
                     projects = raw.map { calculator.buildProjectConsumption($0, nameMap: nameMap) }
                     accountSummary = nil
-                    planNote = nil
                 } catch let err as APIError where err.isForbidden {
                     // Launch plan: fall back to GET /api/v2/projects (current period only)
                     let neonProjects = try await apiClient.fetchProjects(apiKey: apiKey)
                     projects = neonProjects.map { calculator.buildProjectConsumptionFromProject($0) }
                     accountSummary = nil
-                    planNote = "Current billing period · Upgrade to Scale for historical data"
                 }
             } else {
                 // Personal account: account-level totals
@@ -139,7 +135,6 @@ final class AppState {
                 )
                 accountSummary = calculator.buildAccountSummary(raw)
                 projects = []
-                planNote = nil
             }
             lastUpdated = Date()
         } catch {

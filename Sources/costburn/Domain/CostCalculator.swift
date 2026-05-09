@@ -84,20 +84,32 @@ struct CostCalculator: Sendable {
     }
 
     /// Builds from GET /api/v2/projects response — works on all Neon plans.
+    /// Storage is approximated: synthetic_storage_size (instantaneous bytes) × hours
+    /// elapsed in the current billing period. Data transfer is not available from
+    /// this endpoint and is reported as zero.
     func buildProjectConsumptionFromProject(_ project: NeonProject) -> ProjectConsumption {
-        let cuSeconds  = project.computeTimeSeconds   ?? 0
-        let byteHours  = project.dataStorageBytesHour ?? 0
-        let transBytes = project.dataTransferBytes    ?? 0
+        let cuSeconds = project.cpuUsedSec ?? 0
+
+        // Derive billing period start from quota_reset_at (next reset date - 1 month)
+        let storageSizeBytes = project.syntheticStorageSize ?? 0
+        let byteHours: Double
+        if let resetAt = project.quotaResetAt,
+           let periodStart = Calendar.current.date(byAdding: .month, value: -1, to: resetAt) {
+            let hoursElapsed = max(Date().timeIntervalSince(periodStart) / 3600, 0)
+            byteHours = storageSizeBytes * hoursElapsed
+        } else {
+            byteHours = 0
+        }
 
         return ProjectConsumption(
             projectID:      project.id,
             projectName:    project.name,
             computeHours:   cuHours(from: cuSeconds),
             storageGBMonth: gbMonths(from: byteHours),
-            transferGB:     gb(from: transBytes),
+            transferGB:     0, // not exposed by GET /api/v2/projects
             computeCost:    computeCost(cuSeconds: cuSeconds),
             storageCost:    storageCost(byteHours: byteHours),
-            transferCost:   transferCost(bytes: transBytes)
+            transferCost:   0
         )
     }
 

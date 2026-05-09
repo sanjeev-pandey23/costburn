@@ -1,11 +1,10 @@
 import Foundation
 
-// Neon pricing as of 2025 — configurable via Settings > Custom
-// Source: https://neon.tech/pricing
+// Neon pricing — source: https://neon.com/pricing#compute-usage
+// Use Settings → Custom to override any rate.
 enum PricingTier: String, CaseIterable, Identifiable {
     case launch = "Launch"
     case scale = "Scale"
-    case agent = "Business"  // "Business/Agent" plan
     case custom = "Custom"
 
     var id: String { rawValue }
@@ -13,13 +12,13 @@ enum PricingTier: String, CaseIterable, Identifiable {
     var rates: Rates {
         switch self {
         case .launch:
-            return Rates(computePerCUHour: 0.0255, storagePerGBMonth: 0.1195, transferPerGB: 0.09)
+            // Compute $0.106/CU-hour · Storage $0.35/GB-month · Egress $0.10/GB
+            return Rates(computePerCUHour: 0.106, storagePerGBMonth: 0.35, transferPerGB: 0.10)
         case .scale:
-            return Rates(computePerCUHour: 0.0255, storagePerGBMonth: 0.1195, transferPerGB: 0.09)
-        case .agent:
-            return Rates(computePerCUHour: 0.0255, storagePerGBMonth: 0.1195, transferPerGB: 0.09)
+            // Compute $0.222/CU-hour · Storage $0.35/GB-month · Egress $0.10/GB
+            return Rates(computePerCUHour: 0.222, storagePerGBMonth: 0.35, transferPerGB: 0.10)
         case .custom:
-            return Rates(computePerCUHour: 0.0255, storagePerGBMonth: 0.1195, transferPerGB: 0.09)
+            return Rates(computePerCUHour: 0.106, storagePerGBMonth: 0.35, transferPerGB: 0.10)
         }
     }
 
