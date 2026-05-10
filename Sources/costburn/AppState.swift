@@ -33,14 +33,24 @@ final class AppState {
         return String(format: "$%.2f", cost)
     }
 
-    var isConfigured: Bool {
-        !(KeychainHelper.shared.load(key: KeychainHelper.apiKeyTag) ?? "").isEmpty
-    }
+    var isConfigured: Bool { !apiKey.isEmpty }
 
     // MARK: - Private
 
+    // API key cached in memory — Keychain is only read once at init and after
+    // credentials are explicitly saved in Settings, avoiding repeated OS prompts.
+    private(set) var apiKey: String = ""
     private let apiClient = NeonAPIClient()
     private var pollingTask: Task<Void, Never>?
+
+    init() {
+        apiKey = KeychainHelper.shared.load(key: KeychainHelper.apiKeyTag) ?? ""
+    }
+
+    /// Call after saving new credentials in Settings to refresh the in-memory cache.
+    func reloadCredentials() {
+        apiKey = KeychainHelper.shared.load(key: KeychainHelper.apiKeyTag) ?? ""
+    }
 
     // MARK: - Period
 
@@ -89,7 +99,6 @@ final class AppState {
     }
 
     func refresh() async {
-        let apiKey = KeychainHelper.shared.load(key: KeychainHelper.apiKeyTag) ?? ""
         guard !apiKey.isEmpty else { return }
 
         isLoading = true

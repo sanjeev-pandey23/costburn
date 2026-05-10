@@ -264,7 +264,8 @@ struct SettingsView: View {
         Preferences.shared.refreshInterval = refreshInterval
         // Launch at login is applied immediately via onChange; no action needed here.
 
-        // Restart polling with new settings
+        // Refresh cached credentials then restart polling
+        appState.reloadCredentials()
         appState.startPolling()
 
         withAnimation { saved = true }
