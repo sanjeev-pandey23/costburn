@@ -3,6 +3,7 @@ import SwiftUI
 struct PopoverView: View {
     @Environment(AppState.self) private var appState
     @State private var showSettings = false
+    @State private var showPromotionalBanner = true
 
     var body: some View {
         VStack(spacing: 0) {
@@ -40,6 +41,14 @@ struct PopoverView: View {
             footer
                 .padding(.horizontal, 16)
                 .padding(.vertical, 8)
+
+            if showPromotionalBanner {
+                PromotionalBannerView {
+                    showPromotionalBanner = false
+                }
+
+                Divider()
+            }
         }
         .frame(width: 320)
         .sheet(isPresented: $showSettings) {
