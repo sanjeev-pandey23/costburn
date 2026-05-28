@@ -1,7 +1,7 @@
 <p align="center"><strong>Costburn: track your spends</strong></p>
 
 <p align="center">
-  <img src="assets/costburn_screengrab.png" alt="CostBurn screenshot" width="320" />
+  <img src="assets/costburn_screengrab.png" alt="CostBurn screenshot" width="640" />
 </p>
 
 A native macOS menubar app that tracks your [Neon](https://neon.tech) database costs in real time.
