@@ -4,7 +4,7 @@
   <img src="assets/costburn_screengrab.png" alt="CostBurn screenshot" width="640" />
 </p>
 
-A native macOS menubar app that tracks your [Neon](https://neon.tech) database costs in real time.
+A native macOS menubar app that tracks your [Neon](https://neon.tech) database costs and Copilot credits usage in real time.
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/sanjeev-pandey23/costburn/main/install.sh | bash
@@ -23,33 +23,36 @@ brew install --cask costburn
 ## What it shows
 
 - Current month spend estimate in the menubar (e.g. `$3.42`)
-- Click to expand: compute hours, storage GB-months, egress
-- Per-project breakdown (org accounts)
+- Click to expand (NeonDB): compute hours, storage GB-months, egress
+- Per-project breakdown (org accounts) for NeonDB
 - Daily spend trend chart
+- 
 - Configurable spend limit with notifications at 80% and 100%
 - Launch at login — start automatically when you log in
 
 ## Requirements
 
 - macOS 14 (Sonoma) or later
-- Neon account on Launch, Scale, or Business plan
-- Neon API key (free to generate at `console.neon.tech/app/settings/api-keys`)
+- For NeonDB: Neon account on Launch, Scale, or Business plan
+- For NeonDB: Neon API key (free to generate at `console.neon.tech/app/settings/api-keys`)
 
 ## Setup
 
 1. Launch the app — click the `$--.--` icon in your menubar
 2. Click the gear icon to open Settings
-3. Paste your Neon API key
-4. Optionally add your Organization ID for per-project breakdown
-5. Choose your plan tier for accurate pricing
+3. For NeonDB: Paste your Neon API key. No additional setup needed for Copilot
+4. For NeonDB: Optionally add your Organization ID for per-project breakdown
+5. Choose your plan tier for both, NeonDB and Copilot, for accurate pricing
 6. Enable **Launch at login** so CostBurn starts automatically (macOS will prompt for approval on first enable)
 
 ## Pricing accuracy
 
-The app uses Neon's published rates from [https://neon.tech/pricing](https://neon.tech/pricing) and computes estimates from raw usage metrics
+For Neon, the app uses Neon's published rates from [https://neon.tech/pricing](https://neon.tech/pricing) and computes estimates from raw usage metrics
 (CU-seconds, byte-hours, data transfer bytes). Actual invoiced amounts may differ
 slightly due to free-tier allowances, prorations, or plan discounts.
 Use **Settings → Custom** to override any per-unit rate.
+
+For Copilot, the `CopilotSessionReader.swift` — reads ~/.copilot/session-state/*/events.jsonl for actual credit data (totalPremiumRequests), plus VS Code workspaceStorage transcripts for turn counts.
 
 ## Building from source
 

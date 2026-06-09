@@ -18,6 +18,10 @@ final class Preferences {
         case customTransferRate = "custom_transfer_rate"
         case monthlySpendLimit = "monthly_spend_limit"
         case refreshInterval = "refresh_interval"
+        // Copilot
+        case copilotPlan = "copilot_plan"
+        case copilotCreditAllowance = "copilot_credit_allowance"
+        case copilotSpendLimit = "copilot_spend_limit"
     }
 
     // MARK: - Properties
@@ -70,6 +74,40 @@ final class Preferences {
             return v > 0 ? v : 900
         }
         set { defaults.set(newValue, forKey: Key.refreshInterval.rawValue) }
+    }
+
+    // MARK: - Copilot
+
+    var copilotPlan: CopilotPlan {
+        get {
+            guard let raw = defaults.string(forKey: Key.copilotPlan.rawValue),
+                  let plan = CopilotPlan(rawValue: raw) else { return .individualPro }
+            return plan
+        }
+        set { defaults.set(newValue.rawValue, forKey: Key.copilotPlan.rawValue) }
+    }
+
+    /// Custom credit allowance override. If nil, falls back to the plan's default.
+    var copilotCreditAllowance: Int? {
+        get {
+            let v = defaults.integer(forKey: Key.copilotCreditAllowance.rawValue)
+            return v > 0 ? v : nil
+        }
+        set { defaults.set(newValue ?? 0, forKey: Key.copilotCreditAllowance.rawValue) }
+    }
+
+    /// Resolved monthly credit allowance: custom override → plan default → nil.
+    var resolvedCreditAllowance: Int? {
+        copilotCreditAllowance ?? copilotPlan.defaultCreditAllowance
+    }
+
+    /// Optional monthly dollar spend limit for Copilot (in addition to credit allowance).
+    var copilotSpendLimit: Double? {
+        get {
+            let v = defaults.double(forKey: Key.copilotSpendLimit.rawValue)
+            return v > 0 ? v : nil
+        }
+        set { defaults.set(newValue ?? 0, forKey: Key.copilotSpendLimit.rawValue) }
     }
 
     // MARK: - Launch at login (backed by SMAppService, not UserDefaults)

@@ -13,6 +13,13 @@ final class AppState {
     var lastUpdated: Date? = nil
     var selectedPeriod: Period = .month
 
+    // Copilot
+    var copilotUsage: CopilotUsageSummary? = nil
+    var copilotIsLoading = false
+    var copilotError: String? = nil
+
+    var activeTab: AppTab = .neon
+
     // MARK: - Computed
 
     var totalEstimatedCost: Double {
@@ -22,20 +29,29 @@ final class AppState {
     }
 
     var statusBarTitle: String {
-        guard !isLoading || !projects.isEmpty || accountSummary != nil else {
-            return "$--.--"
+        switch activeTab {
+        case .neon:
+            guard !isLoading || !projects.isEmpty || accountSummary != nil else {
+                return "$--.--"
+            }
+            let cost = totalEstimatedCost
+            guard cost > 0 || lastUpdated != nil else { return "$--.--" }
+            if cost >= 100 {
+                return String(format: "$%.0f", cost)
+            }
+            return String(format: "$%.2f", cost)
+        case .copilot:
+            if copilotIsLoading && copilotUsage == nil { return "-- cr" }
+            let cr = copilotUsage?.totalCredits ?? 0
+            return "\(cr) cr"
         }
-        let cost = totalEstimatedCost
-        guard cost > 0 || lastUpdated != nil else { return "$--.--" }
-        if cost >= 100 {
-            return String(format: "$%.0f", cost)
-        }
-        return String(format: "$%.2f", cost)
     }
 
     var isConfigured: Bool { !apiKey.isEmpty }
 
     // MARK: - Private
+
+    private let copilotReader = CopilotSessionReader()
 
     // API key cached in memory — Keychain is only read once at init and after
     // credentials are explicitly saved in Settings, avoiding repeated OS prompts.
@@ -88,11 +104,13 @@ final class AppState {
         pollingTask?.cancel()
         pollingTask = Task {
             await refresh()
+            await refreshCopilot()
             while !Task.isCancelled {
                 let interval = Preferences.shared.refreshInterval
                 try? await Task.sleep(for: .seconds(interval))
                 if !Task.isCancelled {
                     await refresh()
+                    await refreshCopilot()
                 }
             }
         }
@@ -152,4 +170,75 @@ final class AppState {
 
         isLoading = false
     }
+
+    // MARK: - Copilot
+
+    func refreshCopilot() async {
+        copilotIsLoading = true
+        copilotError = nil
+
+        let records = await copilotReader.readSessions(since: selectedPeriod.startDate)
+
+        guard !Task.isCancelled else { return }
+
+        // Aggregate
+        var totalCredits = 0
+        var totalTurns = 0
+        var modelMap: [String: (requestCount: Int, creditCost: Int, inputTokens: Int, outputTokens: Int, cacheReadTokens: Int)] = [:]
+
+        for record in records {
+            totalCredits += record.credits
+            totalTurns += record.turnCount
+            for (model, usage) in record.modelBreakdown {
+                var agg = modelMap[model] ?? (0, 0, 0, 0, 0)
+                agg.requestCount += usage.requestCount
+                agg.creditCost += usage.creditCost
+                agg.inputTokens += usage.inputTokens
+                agg.outputTokens += usage.outputTokens
+                agg.cacheReadTokens += usage.cacheReadTokens
+                modelMap[model] = agg
+            }
+        }
+
+        let sortedBreakdown: [(model: String, usage: CopilotModelUsage)] = modelMap
+            .map { (model, agg) in
+                (model, CopilotModelUsage(
+                    requestCount: agg.requestCount,
+                    creditCost: agg.creditCost,
+                    inputTokens: agg.inputTokens,
+                    outputTokens: agg.outputTokens,
+                    cacheReadTokens: agg.cacheReadTokens
+                ))
+            }
+            .sorted { $0.usage.creditCost > $1.usage.creditCost }
+
+        let estimatedCost = Double(totalCredits) * 0.01
+        var summary = CopilotUsageSummary(
+            totalCredits: totalCredits,
+            estimatedCost: estimatedCost,
+            sessionCount: records.count,
+            turnCount: totalTurns,
+            modelBreakdown: sortedBreakdown
+        )
+
+        // Apply configured allowance / limit
+        if let allowance = Preferences.shared.resolvedCreditAllowance, allowance > 0 {
+            summary.creditAllowanceFraction = Double(totalCredits) / Double(allowance)
+            summary.creditsRemaining = max(allowance - totalCredits, 0)
+        }
+        if let limit = Preferences.shared.copilotSpendLimit, limit > 0 {
+            summary.spendLimitFraction = estimatedCost / limit
+            summary.dollarRemaining = max(limit - estimatedCost, 0)
+        }
+
+        copilotUsage = summary
+        copilotIsLoading = false
+    }
+}
+
+// MARK: - AppTab
+
+enum AppTab: String, CaseIterable {
+    case neon = "Neon DB"
+    case copilot = "Copilot"
 }
