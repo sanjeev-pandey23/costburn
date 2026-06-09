@@ -18,7 +18,7 @@ struct SettingsView: View {
     @State private var spendLimitText: String = ""
 
     // Copilot
-    @State private var copilotPlan: CopilotPlan = .individualPro
+    @State private var copilotPlan: CopilotPlan = .business
     @State private var copilotCustomAllowanceText: String = ""
     @State private var copilotSpendLimitText: String = ""
 

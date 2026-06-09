@@ -81,7 +81,7 @@ final class Preferences {
     var copilotPlan: CopilotPlan {
         get {
             guard let raw = defaults.string(forKey: Key.copilotPlan.rawValue),
-                  let plan = CopilotPlan(rawValue: raw) else { return .individualPro }
+                  let plan = CopilotPlan(rawValue: raw) else { return .business }
             return plan
         }
         set { defaults.set(newValue.rawValue, forKey: Key.copilotPlan.rawValue) }

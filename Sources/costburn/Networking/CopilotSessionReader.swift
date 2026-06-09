@@ -189,7 +189,9 @@ struct CopilotSessionReader: Sendable {
             sessionId: sessionId ?? fileURL.lastPathComponent,
             startTime: resolvedStart,
             source: .vscode,
-            credits: 0,       // VS Code transcripts have no credit data
+            // Each assistant turn = 1 premium request in VS Code Copilot Chat.
+            // No exact billing data in transcript files; turn count is the best local proxy.
+            credits: turnCount,
             turnCount: turnCount,
             modelBreakdown: [:]
         )

@@ -43,6 +43,11 @@ final class AppState {
         case .copilot:
             if copilotIsLoading && copilotUsage == nil { return "-- cr" }
             let cr = copilotUsage?.totalCredits ?? 0
+            if let fraction = copilotUsage?.creditAllowanceFraction {
+                let pct = Int((fraction * 100).rounded())
+                // return "\(cr) cr (\(pct)%)"
+                return "\(pct)% cr" // Simplified for status bar to save space
+            }
             return "\(cr) cr"
         }
     }

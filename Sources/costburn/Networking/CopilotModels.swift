@@ -18,7 +18,7 @@ struct CopilotSessionRecord: Sendable {
     let sessionId: String
     let startTime: Date
     let source: Source
-    /// Sum of totalPremiumRequests (cli) or 0 for vscode transcripts
+    /// Exact totalPremiumRequests (cli) or turn count as proxy (vscode)
     let credits: Int
     /// Number of assistant turns in the session
     let turnCount: Int
