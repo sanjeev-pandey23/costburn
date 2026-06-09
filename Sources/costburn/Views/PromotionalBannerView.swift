@@ -18,7 +18,7 @@ struct PromotionalBannerView: View {
                 .foregroundStyle(.primary)
                 .lineLimit(1)
 
-            Button("Star us on GitHub") {
+            Button("Star it on GitHub") {
                 openURL(repositoryURL)
             }
             .buttonStyle(.plain)

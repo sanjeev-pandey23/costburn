@@ -22,8 +22,9 @@ struct CopilotSessionReader: Sendable {
     func readSessions(since: Date) async -> [CopilotSessionRecord] {
         async let cliRecords = readCLISessions(since: since)
         async let vsCodeRecords = readVSCodeSessions(since: since)
-        let (cli, vscode) = await (cliRecords, vsCodeRecords)
-        return cli + vscode
+        async let jbRecords = readJetBrainsSessions(since: since)
+        let (cli, vscode, jb) = await (cliRecords, vsCodeRecords, jbRecords)
+        return cli + vscode + jb
     }
 
     // MARK: - CLI sessions (~/.copilot/session-state/*/events.jsonl)
@@ -192,6 +193,81 @@ struct CopilotSessionReader: Sendable {
             // Each assistant turn = 1 premium request in VS Code Copilot Chat.
             // No exact billing data in transcript files; turn count is the best local proxy.
             credits: turnCount,
+            turnCount: turnCount,
+            modelBreakdown: [:]
+        )
+    }
+
+    // MARK: - JetBrains / Android Studio (~/.copilot/jb/*/partition-N.jsonl)
+    // The JB plugin stores sessions in partition files with no session.shutdown event —
+    // no credit data is available. We can extract session start time and turn count only.
+
+    private func readJetBrainsSessions(since: Date) async -> [CopilotSessionRecord] {
+        let jbURL = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(".copilot/jb")
+
+        guard let sessionDirs = try? FileManager.default.contentsOfDirectory(
+            at: jbURL,
+            includingPropertiesForKeys: [.isDirectoryKey],
+            options: .skipsHiddenFiles
+        ) else { return [] }
+
+        var records: [CopilotSessionRecord] = []
+        for dir in sessionDirs {
+            if let record = parseJBSession(dir: dir, since: since) {
+                records.append(record)
+            }
+        }
+        return records
+    }
+
+    private func parseJBSession(dir: URL, since: Date) -> CopilotSessionRecord? {
+        // Fast pre-filter: use the directory modification date before reading files
+        let attrs = try? FileManager.default.attributesOfItem(atPath: dir.path)
+        let dirModDate = (attrs?[.modificationDate] as? Date) ?? Date.distantPast
+        guard dirModDate >= since else { return nil }
+
+        // Enumerate all partition files sorted by name (partition-1, partition-2, …)
+        guard let partitions = try? FileManager.default.contentsOfDirectory(
+            at: dir,
+            includingPropertiesForKeys: nil,
+            options: .skipsHiddenFiles
+        ) else { return nil }
+
+        let sortedPartitions = partitions
+            .filter { $0.pathExtension == "jsonl" && $0.lastPathComponent.hasPrefix("partition-") }
+            .sorted { $0.lastPathComponent < $1.lastPathComponent }
+
+        guard !sortedPartitions.isEmpty else { return nil }
+
+        var startTime: Date? = nil
+        var turnCount = 0
+
+        for partition in sortedPartitions {
+            guard let content = try? String(contentsOf: partition, encoding: .utf8) else { continue }
+            for line in content.components(separatedBy: "\n") {
+                let trimmed = line.trimmingCharacters(in: .whitespaces)
+                guard !trimmed.isEmpty, let data = trimmed.data(using: .utf8) else { continue }
+
+                if startTime == nil && trimmed.contains("\"partition.created\"") {
+                    if let parsed = try? decoder.decode(JBPartitionCreated.self, from: data) {
+                        // createdAt is Unix ms
+                        startTime = Date(timeIntervalSince1970: parsed.data.createdAt / 1000.0)
+                    }
+                } else if trimmed.contains("\"assistant.turn_end\"") {
+                    turnCount += 1
+                }
+            }
+        }
+
+        let resolvedStart = startTime ?? dirModDate
+        guard resolvedStart >= since else { return nil }
+
+        return CopilotSessionRecord(
+            sessionId: dir.lastPathComponent,
+            startTime: resolvedStart,
+            source: .jetbrains,
+            credits: 0,   // JB plugin does not write credit data locally
             turnCount: turnCount,
             modelBreakdown: [:]
         )

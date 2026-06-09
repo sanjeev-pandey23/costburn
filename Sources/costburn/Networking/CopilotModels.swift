@@ -13,7 +13,7 @@ struct CopilotModelUsage: Sendable {
 // MARK: - Single parsed session record
 
 struct CopilotSessionRecord: Sendable {
-    enum Source: Sendable { case cli, vscode }
+    enum Source: Sendable { case cli, vscode, jetbrains }
 
     let sessionId: String
     let startTime: Date
@@ -111,4 +111,14 @@ struct TranscriptSessionStart: Decodable {
 struct TranscriptSessionData: Decodable {
     let sessionId: String?
     let startTime: String?
+}
+
+// MARK: - Raw JSON shape for JetBrains partition.created
+
+struct JBPartitionCreated: Decodable {
+    let data: JBPartitionData
+}
+
+struct JBPartitionData: Decodable {
+    let createdAt: Double   // Unix ms
 }
