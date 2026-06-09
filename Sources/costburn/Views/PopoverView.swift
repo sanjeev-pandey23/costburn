@@ -15,24 +15,44 @@ struct PopoverView: View {
 
             Divider()
 
-            if !appState.isConfigured {
-                setupPrompt
+            // Tab switcher
+            tabPicker
+                .padding(.horizontal, 16)
+                .padding(.top, 10)
+                .padding(.bottom, 4)
+
+            Divider()
+
+            if appState.activeTab == .neon {
+                if !appState.isConfigured {
+                    setupPrompt
+                } else {
+                    periodPicker
+                        .padding(.horizontal, 16)
+                        .padding(.top, 10)
+
+                    // Neon content
+                    ScrollView {
+                        VStack(spacing: 12) {
+                            SummaryView()
+                            if !appState.projects.isEmpty {
+                                projectList
+                            }
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 12)
+                    }
+                }
             } else {
-                // Period picker
+                // Copilot content
                 periodPicker
                     .padding(.horizontal, 16)
                     .padding(.top, 10)
 
-                // Main content
                 ScrollView {
-                    VStack(spacing: 12) {
-                        SummaryView()
-                        if !appState.projects.isEmpty {
-                            projectList
-                        }
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 12)
+                    CopilotTabView()
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 12)
                 }
             }
 
@@ -59,50 +79,110 @@ struct PopoverView: View {
     // MARK: - Header
 
     private var header: some View {
-        HStack {
+        let isLoading = appState.activeTab == .neon ? appState.isLoading : appState.copilotIsLoading
+        return HStack {
             HStack(spacing: 6) {
                 Image(systemName: "flame.fill")
                     .foregroundStyle(.orange)
                     .font(.system(size: 14, weight: .semibold))
                 Text("CostBurn")
                     .font(.system(size: 13, weight: .semibold))
-                Text("· Neon DB")
-                    .font(.system(size: 12))
-                    .foregroundStyle(.secondary)
             }
             Spacer()
             Button {
-                Task { await appState.refresh() }
+                if appState.activeTab == .neon {
+                    Task { await appState.refresh() }
+                } else {
+                    Task { await appState.refreshCopilot() }
+                }
             } label: {
-                Image(systemName: appState.isLoading ? "arrow.clockwise" : "arrow.clockwise")
+                Image(systemName: "arrow.clockwise")
                     .font(.system(size: 12))
                     .foregroundStyle(.secondary)
-                    .rotationEffect(appState.isLoading ? .degrees(360) : .zero)
+                    .rotationEffect(isLoading ? .degrees(360) : .zero)
                     .animation(
-                        appState.isLoading
+                        isLoading
                             ? .linear(duration: 1).repeatForever(autoreverses: false)
                             : .default,
-                        value: appState.isLoading
+                        value: isLoading
                     )
             }
             .buttonStyle(.plain)
         }
     }
 
+    // MARK: - Tab picker
+
+    private var tabPicker: some View {
+        @Bindable var state = appState
+        return Picker("Tab", selection: $state.activeTab) {
+            ForEach(AppTab.allCases, id: \.self) { tab in
+                Text(tab.rawValue).tag(tab)
+            }
+        }
+        .pickerStyle(.segmented)
+    }
+
     // MARK: - Period Picker
 
     private var periodPicker: some View {
         @Bindable var state = appState
-        return Picker("Period", selection: $state.selectedPeriod) {
-            ForEach(AppState.Period.allCases) { period in
-                Text(period.rawValue).tag(period)
+        return PeriodSegmentedPicker(selection: $state.selectedPeriod)
+            .onChange(of: appState.selectedPeriod) {
+                Task {
+                    await appState.refresh()
+                    await appState.refreshCopilot()
+                }
             }
+    }
+}
+
+// MARK: - NSViewRepresentable period picker
+// Uses setContentHuggingPriority(.defaultLow) so the NSSegmentedControl
+// expands to fill available width instead of using intrinsic content size.
+// Required because two sibling NSSegmentedControls in the same NSHostingView
+// negotiate sizes with each other, shrinking the period picker.
+
+private struct PeriodSegmentedPicker: NSViewRepresentable {
+    @Binding var selection: AppState.Period
+
+    func makeNSView(context: Context) -> NSSegmentedControl {
+        let control = NSSegmentedControl()
+        control.segmentStyle = .rounded
+        control.trackingMode = .selectOne
+        control.segmentCount = AppState.Period.allCases.count
+        for (i, period) in AppState.Period.allCases.enumerated() {
+            control.setLabel(period.rawValue, forSegment: i)
         }
-        .pickerStyle(.segmented)
-        .onChange(of: appState.selectedPeriod) {
-            Task { await appState.refresh() }
+        control.target = context.coordinator
+        control.action = #selector(Coordinator.selectionChanged(_:))
+        control.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        return control
+    }
+
+    func updateNSView(_ control: NSSegmentedControl, context: Context) {
+        let idx = AppState.Period.allCases.firstIndex(of: selection) ?? 0
+        if control.selectedSegment != idx {
+            control.selectedSegment = idx
         }
     }
+
+    func makeCoordinator() -> Coordinator { Coordinator(self) }
+
+    @MainActor
+    final class Coordinator: NSObject {
+        var parent: PeriodSegmentedPicker
+        init(_ parent: PeriodSegmentedPicker) { self.parent = parent }
+
+        @objc func selectionChanged(_ sender: NSSegmentedControl) {
+            let period = AppState.Period.allCases[sender.selectedSegment]
+            parent.selection = period
+        }
+    }
+}
+
+// Re-open PopoverView to keep the closing brace matched — struct continues above.
+extension PopoverView {
 
     // MARK: - Project list
 

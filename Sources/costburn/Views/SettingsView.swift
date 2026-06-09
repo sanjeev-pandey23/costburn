@@ -17,6 +17,11 @@ struct SettingsView: View {
     // Alerts
     @State private var spendLimitText: String = ""
 
+    // Copilot
+    @State private var copilotPlan: CopilotPlan = .individualPro
+    @State private var copilotCustomAllowanceText: String = ""
+    @State private var copilotSpendLimitText: String = ""
+
     // General
     @State private var refreshInterval: TimeInterval = 900
     @State private var launchAtLogin: Bool = false
@@ -105,6 +110,46 @@ struct SettingsView: View {
                                 .textFieldStyle(.roundedBorder)
                                 .font(.system(size: 12))
                             Text("Receive a notification at 80% and 100% of this limit.")
+                                .font(.system(size: 10))
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+
+                    // MARK: Copilot
+                    section("Copilot") {
+                        VStack(alignment: .leading, spacing: 8) {
+                            label("Plan")
+                            Picker("Plan", selection: $copilotPlan) {
+                                ForEach(CopilotPlan.allCases) { plan in
+                                    Text(plan.rawValue).tag(plan)
+                                }
+                            }
+                            .pickerStyle(.menu)
+
+                            // Show plan default allowance (or custom field)
+                            if copilotPlan == .custom {
+                                label("Monthly credit allowance")
+                                TextField("e.g. 5000", text: $copilotCustomAllowanceText)
+                                    .textFieldStyle(.roundedBorder)
+                                    .font(.system(size: 12))
+                            } else if let allowance = copilotPlan.defaultCreditAllowance {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "sparkles")
+                                        .font(.system(size: 10))
+                                        .foregroundStyle(.secondary)
+                                    Text("Monthly allowance: \(allowance) credits ($\(String(format: "%.0f", Double(allowance) * 0.01)))")
+                                        .font(.system(size: 11))
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+
+                            Divider().padding(.vertical, 2)
+
+                            label("Spend limit (optional)")
+                            TextField("e.g. 15.00", text: $copilotSpendLimitText)
+                                .textFieldStyle(.roundedBorder)
+                                .font(.system(size: 12))
+                            Text("Set a dollar cap in addition to your credit allowance. 1 credit = $0.01.")
                                 .font(.system(size: 10))
                                 .foregroundStyle(.secondary)
                         }
@@ -236,6 +281,14 @@ struct SettingsView: View {
         refreshInterval = Preferences.shared.refreshInterval
         launchAtLogin = Preferences.shared.launchAtLogin
         loginItemNeedsApproval = Preferences.shared.launchAtLoginStatus == .requiresApproval
+
+        copilotPlan = Preferences.shared.copilotPlan
+        if let customAllowance = Preferences.shared.copilotCreditAllowance {
+            copilotCustomAllowanceText = "\(customAllowance)"
+        }
+        if let limit = Preferences.shared.copilotSpendLimit {
+            copilotSpendLimitText = String(format: "%.2f", limit)
+        }
     }
 
     private func saveAndDismiss() {
@@ -264,9 +317,19 @@ struct SettingsView: View {
         Preferences.shared.refreshInterval = refreshInterval
         // Launch at login is applied immediately via onChange; no action needed here.
 
+        // Copilot
+        Preferences.shared.copilotPlan = copilotPlan
+        if copilotPlan == .custom {
+            Preferences.shared.copilotCreditAllowance = Int(copilotCustomAllowanceText)
+        } else {
+            Preferences.shared.copilotCreditAllowance = nil
+        }
+        Preferences.shared.copilotSpendLimit = Double(copilotSpendLimitText)
+
         // Refresh cached credentials then restart polling
         appState.reloadCredentials()
         appState.startPolling()
+        Task { await appState.refreshCopilot() }
 
         withAnimation { saved = true }
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {

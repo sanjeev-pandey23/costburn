@@ -17,7 +17,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: - Status Item
 
     private func setupStatusItem() {
-        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        statusItem = NSStatusBar.system.statusItem(withLength: 72)
         guard let button = statusItem.button else { return }
         button.title = "$--.--"
         button.action = #selector(togglePopover)
