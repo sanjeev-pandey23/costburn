@@ -13,12 +13,14 @@ final class AppState {
     var lastUpdated: Date? = nil
     var selectedPeriod: Period = .month
 
-    // Copilot
-    var copilotUsage: CopilotUsageSummary? = nil
-    var copilotIsLoading = false
-    var copilotError: String? = nil
+    // AI usage
+    var aiUsage: [AIUsageProvider: AIUsageSummary] = [:]
+    var aiUsageIsLoading = false
+    var aiUsageError: String? = nil
+    var aiUsageLastUpdated: Date? = nil
 
     var activeTab: AppTab = .neon
+    var activeAIUsageProvider: AIUsageProvider = .copilot
 
     // MARK: - Computed
 
@@ -40,15 +42,22 @@ final class AppState {
                 return String(format: "$%.0f", cost)
             }
             return String(format: "$%.2f", cost)
-        case .copilot:
-            if copilotIsLoading && copilotUsage == nil { return "-- cr" }
-            let cr = copilotUsage?.totalCredits ?? 0
-            if let fraction = copilotUsage?.creditAllowanceFraction {
-                let pct = Int((fraction * 100).rounded())
-                // return "\(cr) cr (\(pct)%)"
-                return "\(pct)% cr" // Simplified for status bar to save space
+        case .aiUsage:
+            let provider = activeAIUsageProvider
+            if aiUsageIsLoading && aiUsage[provider] == nil {
+                return provider.usesCredits ? "-- cr" : "$--.--"
             }
-            return "\(cr) cr"
+            guard let summary = aiUsage[provider] else {
+                return provider.usesCredits ? "0 cr" : "$--.--"
+            }
+            if provider.usesCredits {
+                if let fraction = summary.creditAllowanceFraction {
+                    let pct = Int((fraction * 100).rounded())
+                    return "\(pct)% cr"
+                }
+                return "\(summary.totalCredits) cr"
+            }
+            return formatStatusCost(summary.estimatedCost)
         }
     }
 
@@ -57,6 +66,8 @@ final class AppState {
     // MARK: - Private
 
     private let copilotReader = CopilotSessionReader()
+    private let claudeReader = ClaudeSessionReader()
+    private let codexReader = CodexSessionReader()
 
     // API key cached in memory — Keychain is only read once at init and after
     // credentials are explicitly saved in Settings, avoiding repeated OS prompts.
@@ -109,13 +120,13 @@ final class AppState {
         pollingTask?.cancel()
         pollingTask = Task {
             await refresh()
-            await refreshCopilot()
+            await refreshAIUsage()
             while !Task.isCancelled {
                 let interval = Preferences.shared.refreshInterval
                 try? await Task.sleep(for: .seconds(interval))
                 if !Task.isCancelled {
                     await refresh()
-                    await refreshCopilot()
+                    await refreshAIUsage()
                 }
             }
         }
@@ -176,68 +187,58 @@ final class AppState {
         isLoading = false
     }
 
-    // MARK: - Copilot
+    // MARK: - AI usage
+
+    func refreshAIUsage() async {
+        aiUsageIsLoading = true
+        aiUsageError = nil
+
+        async let copilotRecords = copilotReader.readSessions(since: selectedPeriod.startDate)
+        async let claudeRecords = claudeReader.readSessions(since: selectedPeriod.startDate)
+        async let codexRecords = codexReader.readSessions(since: selectedPeriod.startDate)
+
+        let recordsByProvider: [AIUsageProvider: [AIUsageSessionRecord]] = await [
+            .copilot: copilotRecords,
+            .claude: claudeRecords,
+            .codex: codexRecords
+        ]
+
+        guard !Task.isCancelled else {
+            aiUsageIsLoading = false
+            return
+        }
+
+        aiUsage = Dictionary(
+            uniqueKeysWithValues: AIUsageProvider.allCases.map { provider in
+                (
+                    provider,
+                    AIUsageAggregator.summary(
+                        provider: provider,
+                        records: recordsByProvider[provider] ?? [],
+                        creditAllowance: provider == .copilot ? Preferences.shared.resolvedCreditAllowance : nil,
+                        spendLimit: Preferences.shared.aiSpendLimit(for: provider)
+                    )
+                )
+            }
+        )
+        aiUsageLastUpdated = Date()
+        aiUsageIsLoading = false
+    }
 
     func refreshCopilot() async {
-        copilotIsLoading = true
-        copilotError = nil
+        await refreshAIUsage()
+    }
 
-        let records = await copilotReader.readSessions(since: selectedPeriod.startDate)
+    func aiUsageSummary(for provider: AIUsageProvider) -> AIUsageSummary? {
+        aiUsage[provider]
+    }
 
-        guard !Task.isCancelled else { return }
-
-        // Aggregate
-        var totalCredits = 0
-        var totalTurns = 0
-        var modelMap: [String: (requestCount: Int, creditCost: Int, inputTokens: Int, outputTokens: Int, cacheReadTokens: Int)] = [:]
-
-        for record in records {
-            totalCredits += record.credits
-            totalTurns += record.turnCount
-            for (model, usage) in record.modelBreakdown {
-                var agg = modelMap[model] ?? (0, 0, 0, 0, 0)
-                agg.requestCount += usage.requestCount
-                agg.creditCost += usage.creditCost
-                agg.inputTokens += usage.inputTokens
-                agg.outputTokens += usage.outputTokens
-                agg.cacheReadTokens += usage.cacheReadTokens
-                modelMap[model] = agg
-            }
+    private func formatStatusCost(_ value: Double) -> String {
+        guard value > 0 else { return "$0.00" }
+        if value >= 100 {
+            return String(format: "$%.0f", value)
         }
-
-        let sortedBreakdown: [(model: String, usage: CopilotModelUsage)] = modelMap
-            .map { (model, agg) in
-                (model, CopilotModelUsage(
-                    requestCount: agg.requestCount,
-                    creditCost: agg.creditCost,
-                    inputTokens: agg.inputTokens,
-                    outputTokens: agg.outputTokens,
-                    cacheReadTokens: agg.cacheReadTokens
-                ))
-            }
-            .sorted { $0.usage.creditCost > $1.usage.creditCost }
-
-        let estimatedCost = Double(totalCredits) * 0.01
-        var summary = CopilotUsageSummary(
-            totalCredits: totalCredits,
-            estimatedCost: estimatedCost,
-            sessionCount: records.count,
-            turnCount: totalTurns,
-            modelBreakdown: sortedBreakdown
-        )
-
-        // Apply configured allowance / limit
-        if let allowance = Preferences.shared.resolvedCreditAllowance, allowance > 0 {
-            summary.creditAllowanceFraction = Double(totalCredits) / Double(allowance)
-            summary.creditsRemaining = max(allowance - totalCredits, 0)
-        }
-        if let limit = Preferences.shared.copilotSpendLimit, limit > 0 {
-            summary.spendLimitFraction = estimatedCost / limit
-            summary.dollarRemaining = max(limit - estimatedCost, 0)
-        }
-
-        copilotUsage = summary
-        copilotIsLoading = false
+        return String(format: "$%.2f", value)
     }
 }
 
@@ -245,5 +246,5 @@ final class AppState {
 
 enum AppTab: String, CaseIterable {
     case neon = "Neon DB"
-    case copilot = "Copilot"
+    case aiUsage = "AI Usage"
 }

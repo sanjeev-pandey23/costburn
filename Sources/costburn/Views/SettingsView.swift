@@ -21,6 +21,8 @@ struct SettingsView: View {
     @State private var copilotPlan: CopilotPlan = .business
     @State private var copilotCustomAllowanceText: String = ""
     @State private var copilotSpendLimitText: String = ""
+    @State private var claudeSpendLimitText: String = ""
+    @State private var codexSpendLimitText: String = ""
 
     // General
     @State private var refreshInterval: TimeInterval = 900
@@ -115,10 +117,10 @@ struct SettingsView: View {
                         }
                     }
 
-                    // MARK: Copilot
-                    section("Copilot") {
+                    // MARK: AI Usage
+                    section("AI Usage") {
                         VStack(alignment: .leading, spacing: 8) {
-                            label("Plan")
+                            label("Copilot plan")
                             Picker("Plan", selection: $copilotPlan) {
                                 ForEach(CopilotPlan.allCases) { plan in
                                     Text(plan.rawValue).tag(plan)
@@ -145,11 +147,11 @@ struct SettingsView: View {
 
                             Divider().padding(.vertical, 2)
 
-                            label("Spend limit (optional)")
-                            TextField("e.g. 15.00", text: $copilotSpendLimitText)
-                                .textFieldStyle(.roundedBorder)
-                                .font(.system(size: 12))
-                            Text("Set a dollar cap in addition to your credit allowance. 1 credit = $0.01.")
+                            label("Monthly spend limits")
+                            spendLimitField("Copilot", binding: $copilotSpendLimitText)
+                            spendLimitField("Claude", binding: $claudeSpendLimitText)
+                            spendLimitField("Codex", binding: $codexSpendLimitText)
+                            Text("Leave blank to disable a limit. Copilot also uses its configured credit allowance.")
                                 .font(.system(size: 10))
                                 .foregroundStyle(.secondary)
                         }
@@ -248,6 +250,18 @@ struct SettingsView: View {
         }
     }
 
+    private func spendLimitField(_ label: String, binding: Binding<String>) -> some View {
+        HStack {
+            Text(label)
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
+                .frame(width: 72, alignment: .leading)
+            TextField("e.g. 15.00", text: binding)
+                .textFieldStyle(.roundedBorder)
+                .font(.system(size: 12))
+        }
+    }
+
     // MARK: - Launch at login
 
     private func applyLaunchAtLogin(_ enabled: Bool) {
@@ -289,6 +303,12 @@ struct SettingsView: View {
         if let limit = Preferences.shared.copilotSpendLimit {
             copilotSpendLimitText = String(format: "%.2f", limit)
         }
+        if let limit = Preferences.shared.claudeSpendLimit {
+            claudeSpendLimitText = String(format: "%.2f", limit)
+        }
+        if let limit = Preferences.shared.codexSpendLimit {
+            codexSpendLimitText = String(format: "%.2f", limit)
+        }
     }
 
     private func saveAndDismiss() {
@@ -317,7 +337,7 @@ struct SettingsView: View {
         Preferences.shared.refreshInterval = refreshInterval
         // Launch at login is applied immediately via onChange; no action needed here.
 
-        // Copilot
+        // AI usage
         Preferences.shared.copilotPlan = copilotPlan
         if copilotPlan == .custom {
             Preferences.shared.copilotCreditAllowance = Int(copilotCustomAllowanceText)
@@ -325,11 +345,13 @@ struct SettingsView: View {
             Preferences.shared.copilotCreditAllowance = nil
         }
         Preferences.shared.copilotSpendLimit = Double(copilotSpendLimitText)
+        Preferences.shared.claudeSpendLimit = Double(claudeSpendLimitText)
+        Preferences.shared.codexSpendLimit = Double(codexSpendLimitText)
 
         // Refresh cached credentials then restart polling
         appState.reloadCredentials()
         appState.startPolling()
-        Task { await appState.refreshCopilot() }
+        Task { await appState.refreshAIUsage() }
 
         withAnimation { saved = true }
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {

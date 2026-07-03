@@ -4,7 +4,7 @@
   <img src="assets/costburn_screengrab.png" alt="CostBurn screenshot" width="640" />
 </p>
 
-A native macOS menubar app that tracks your [Neon](https://neon.tech) database costs and Copilot credits usage in real time.
+A native macOS menubar app that tracks [Neon](https://neon.tech) database costs and local AI agent usage for Copilot, Claude, and Codex.
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/sanjeev-pandey23/costburn/main/install.sh | bash
@@ -25,8 +25,8 @@ brew install --cask costburn
 - Current month spend estimate in the menubar (e.g. `$3.42`)
 - Click to expand (NeonDB): compute hours, storage GB-months, egress
 - Per-project breakdown (org accounts) for NeonDB
+- AI Usage tab with Copilot, Claude, and Codex breakdowns
 - Daily spend trend chart
-- 
 - Configurable spend limit with notifications at 80% and 100%
 - Launch at login — start automatically when you log in
 
@@ -35,14 +35,15 @@ brew install --cask costburn
 - macOS 14 (Sonoma) or later
 - For NeonDB: Neon account on Launch, Scale, or Business plan
 - For NeonDB: Neon API key (free to generate at `console.neon.tech/app/settings/api-keys`)
+- For AI Usage: local agent logs only; no API keys required
 
 ## Setup
 
 1. Launch the app — click the `$--.--` icon in your menubar
 2. Click the gear icon to open Settings
-3. For NeonDB: Paste your Neon API key. No additional setup needed for Copilot
+3. For NeonDB: Paste your Neon API key. No setup is needed for AI Usage
 4. For NeonDB: Optionally add your Organization ID for per-project breakdown
-5. Choose your plan tier for both, NeonDB and Copilot, for accurate pricing
+5. Choose your Neon tier, Copilot plan, and optional AI spend limits
 6. Enable **Launch at login** so CostBurn starts automatically (macOS will prompt for approval on first enable)
 
 ## Pricing accuracy
@@ -52,7 +53,13 @@ For Neon, the app uses Neon's published rates from [https://neon.tech/pricing](h
 slightly due to free-tier allowances, prorations, or plan discounts.
 Use **Settings → Custom** to override any per-unit rate.
 
-For Copilot, the `CopilotSessionReader.swift` — reads ~/.copilot/session-state/*/events.jsonl for actual credit data (totalPremiumRequests), plus VS Code workspaceStorage transcripts for turn counts.
+For AI Usage, CostBurn reads local logs only:
+
+- Copilot: `~/.copilot/session-state/*/events.jsonl`, plus VS Code and JetBrains transcripts when available
+- Claude: Claude Code JSONL transcripts under `~/.claude/projects`
+- Codex: token-count events under `~/.codex/sessions`
+
+Copilot shows premium request credits. Claude and Codex show token-based cost estimates from the bundled pricing table; actual invoices may differ.
 
 ## Building from source
 
@@ -61,15 +68,15 @@ Requires Xcode 16+ / Swift 6.
 ```bash
 git clone https://github.com/sanjeev-pandey23/costburn
 cd costburn
-./Scripts/package-app.sh 0.1.0
+./Scripts/package-app.sh 0.0.9
 open .build/CostBurn.app
 ```
 
 ## Releasing
 
 ```bash
-git tag mac-v0.1.0
-git push origin mac-v0.1.0
+git tag mac-v0.0.9
+git push origin mac-v0.0.9
 ```
 
 GitHub Actions builds a universal binary (arm64 + x86_64), creates a release,

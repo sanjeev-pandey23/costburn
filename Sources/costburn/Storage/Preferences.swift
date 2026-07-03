@@ -22,6 +22,8 @@ final class Preferences {
         case copilotPlan = "copilot_plan"
         case copilotCreditAllowance = "copilot_credit_allowance"
         case copilotSpendLimit = "copilot_spend_limit"
+        case claudeSpendLimit = "claude_spend_limit"
+        case codexSpendLimit = "codex_spend_limit"
     }
 
     // MARK: - Properties
@@ -108,6 +110,30 @@ final class Preferences {
             return v > 0 ? v : nil
         }
         set { defaults.set(newValue ?? 0, forKey: Key.copilotSpendLimit.rawValue) }
+    }
+
+    var claudeSpendLimit: Double? {
+        get {
+            let v = defaults.double(forKey: Key.claudeSpendLimit.rawValue)
+            return v > 0 ? v : nil
+        }
+        set { defaults.set(newValue ?? 0, forKey: Key.claudeSpendLimit.rawValue) }
+    }
+
+    var codexSpendLimit: Double? {
+        get {
+            let v = defaults.double(forKey: Key.codexSpendLimit.rawValue)
+            return v > 0 ? v : nil
+        }
+        set { defaults.set(newValue ?? 0, forKey: Key.codexSpendLimit.rawValue) }
+    }
+
+    func aiSpendLimit(for provider: AIUsageProvider) -> Double? {
+        switch provider {
+        case .copilot: return copilotSpendLimit
+        case .claude: return claudeSpendLimit
+        case .codex: return codexSpendLimit
+        }
     }
 
     // MARK: - Launch at login (backed by SMAppService, not UserDefaults)

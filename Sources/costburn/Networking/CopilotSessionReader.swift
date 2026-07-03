@@ -19,7 +19,7 @@ struct CopilotSessionReader: Sendable {
 
     // MARK: - Public API
 
-    func readSessions(since: Date) async -> [CopilotSessionRecord] {
+    func readSessions(since: Date) async -> [AIUsageSessionRecord] {
         async let cliRecords = readCLISessions(since: since)
         async let vsCodeRecords = readVSCodeSessions(since: since)
         async let jbRecords = readJetBrainsSessions(since: since)
@@ -29,7 +29,7 @@ struct CopilotSessionReader: Sendable {
 
     // MARK: - CLI sessions (~/.copilot/session-state/*/events.jsonl)
 
-    private func readCLISessions(since: Date) async -> [CopilotSessionRecord] {
+    private func readCLISessions(since: Date) async -> [AIUsageSessionRecord] {
         let sessionStateURL = FileManager.default
             .homeDirectoryForCurrentUser
             .appendingPathComponent(".copilot/session-state")
@@ -40,7 +40,7 @@ struct CopilotSessionReader: Sendable {
             options: .skipsHiddenFiles
         ) else { return [] }
 
-        var records: [CopilotSessionRecord] = []
+        var records: [AIUsageSessionRecord] = []
         for dir in subdirs {
             let eventsURL = dir.appendingPathComponent("events.jsonl")
             guard FileManager.default.fileExists(atPath: eventsURL.path) else { continue }
@@ -51,7 +51,7 @@ struct CopilotSessionReader: Sendable {
         return records
     }
 
-    private func parseCliSession(eventsURL: URL, since: Date) -> CopilotSessionRecord? {
+    private func parseCliSession(eventsURL: URL, since: Date) -> AIUsageSessionRecord? {
         guard let content = try? String(contentsOf: eventsURL, encoding: .utf8) else { return nil }
         let lines = content.components(separatedBy: "\n")
 
@@ -99,25 +99,29 @@ struct CopilotSessionReader: Sendable {
         let breakdown = buildModelBreakdown(from: sd.modelMetrics ?? [:])
         let sid = sessionId ?? eventsURL.deletingLastPathComponent().lastPathComponent
 
-        return CopilotSessionRecord(
+        return AIUsageSessionRecord(
             sessionId: sid,
             startTime: startTime,
-            source: .cli,
+            provider: .copilot,
+            source: .copilotCLI,
             credits: credits,
             turnCount: turnCount,
-            modelBreakdown: breakdown
+            modelBreakdown: breakdown,
+            estimatedCost: Double(credits) * 0.01
         )
     }
 
-    private func buildModelBreakdown(from raw: [String: RawModelMetrics]) -> [String: CopilotModelUsage] {
-        var result: [String: CopilotModelUsage] = [:]
+    private func buildModelBreakdown(from raw: [String: RawModelMetrics]) -> [String: AIModelUsage] {
+        var result: [String: AIModelUsage] = [:]
         for (model, metrics) in raw {
-            result[model] = CopilotModelUsage(
+            let creditCost = metrics.requests?.cost ?? 0
+            result[model] = AIModelUsage(
                 requestCount: metrics.requests?.count ?? 0,
-                creditCost: metrics.requests?.cost ?? 0,
+                creditCost: creditCost,
                 inputTokens: metrics.usage?.inputTokens ?? 0,
                 outputTokens: metrics.usage?.outputTokens ?? 0,
-                cacheReadTokens: metrics.usage?.cacheReadTokens ?? 0
+                cacheReadTokens: metrics.usage?.cacheReadTokens ?? 0,
+                estimatedCost: Double(creditCost) * 0.01
             )
         }
         return result
@@ -125,7 +129,7 @@ struct CopilotSessionReader: Sendable {
 
     // MARK: - VS Code chat transcripts
 
-    private func readVSCodeSessions(since: Date) async -> [CopilotSessionRecord] {
+    private func readVSCodeSessions(since: Date) async -> [AIUsageSessionRecord] {
         let wsStorageURL = FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent("Library/Application Support/Code/User/workspaceStorage")
 
@@ -135,7 +139,7 @@ struct CopilotSessionReader: Sendable {
             options: .skipsHiddenFiles
         ) else { return [] }
 
-        var records: [CopilotSessionRecord] = []
+        var records: [AIUsageSessionRecord] = []
         for wsDir in workspaceDirs {
             let transcriptsURL = wsDir
                 .appendingPathComponent("GitHub.copilot-chat/transcripts")
@@ -154,7 +158,7 @@ struct CopilotSessionReader: Sendable {
         return records
     }
 
-    private func parseVSCodeTranscript(_ fileURL: URL, since: Date) -> CopilotSessionRecord? {
+    private func parseVSCodeTranscript(_ fileURL: URL, since: Date) -> AIUsageSessionRecord? {
         // Use modification date as a fast pre-filter before reading the file
         let attrs = try? FileManager.default.attributesOfItem(atPath: fileURL.path)
         let modDate = (attrs?[.modificationDate] as? Date) ?? Date.distantPast
@@ -186,15 +190,17 @@ struct CopilotSessionReader: Sendable {
         let resolvedStart = startTime ?? modDate
         guard resolvedStart >= since else { return nil }
 
-        return CopilotSessionRecord(
+        return AIUsageSessionRecord(
             sessionId: sessionId ?? fileURL.lastPathComponent,
             startTime: resolvedStart,
-            source: .vscode,
+            provider: .copilot,
+            source: .copilotVSCode,
             // Each assistant turn = 1 premium request in VS Code Copilot Chat.
             // No exact billing data in transcript files; turn count is the best local proxy.
             credits: turnCount,
             turnCount: turnCount,
-            modelBreakdown: [:]
+            modelBreakdown: [:],
+            estimatedCost: Double(turnCount) * 0.01
         )
     }
 
@@ -202,7 +208,7 @@ struct CopilotSessionReader: Sendable {
     // The JB plugin stores sessions in partition files with no session.shutdown event —
     // no credit data is available. We can extract session start time and turn count only.
 
-    private func readJetBrainsSessions(since: Date) async -> [CopilotSessionRecord] {
+    private func readJetBrainsSessions(since: Date) async -> [AIUsageSessionRecord] {
         let jbURL = FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent(".copilot/jb")
 
@@ -212,7 +218,7 @@ struct CopilotSessionReader: Sendable {
             options: .skipsHiddenFiles
         ) else { return [] }
 
-        var records: [CopilotSessionRecord] = []
+        var records: [AIUsageSessionRecord] = []
         for dir in sessionDirs {
             if let record = parseJBSession(dir: dir, since: since) {
                 records.append(record)
@@ -221,7 +227,7 @@ struct CopilotSessionReader: Sendable {
         return records
     }
 
-    private func parseJBSession(dir: URL, since: Date) -> CopilotSessionRecord? {
+    private func parseJBSession(dir: URL, since: Date) -> AIUsageSessionRecord? {
         // Fast pre-filter: use the directory modification date before reading files
         let attrs = try? FileManager.default.attributesOfItem(atPath: dir.path)
         let dirModDate = (attrs?[.modificationDate] as? Date) ?? Date.distantPast
@@ -263,13 +269,15 @@ struct CopilotSessionReader: Sendable {
         let resolvedStart = startTime ?? dirModDate
         guard resolvedStart >= since else { return nil }
 
-        return CopilotSessionRecord(
+        return AIUsageSessionRecord(
             sessionId: dir.lastPathComponent,
             startTime: resolvedStart,
-            source: .jetbrains,
+            provider: .copilot,
+            source: .copilotJetBrains,
             credits: 0,   // JB plugin does not write credit data locally
             turnCount: turnCount,
-            modelBreakdown: [:]
+            modelBreakdown: [:],
+            estimatedCost: 0
         )
     }
 }

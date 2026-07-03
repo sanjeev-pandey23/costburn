@@ -1,50 +1,5 @@
 import Foundation
 
-// MARK: - Per-model usage inside a session
-
-struct CopilotModelUsage: Sendable {
-    let requestCount: Int
-    let creditCost: Int    // from requests.cost in session.shutdown
-    let inputTokens: Int
-    let outputTokens: Int
-    let cacheReadTokens: Int
-}
-
-// MARK: - Single parsed session record
-
-struct CopilotSessionRecord: Sendable {
-    enum Source: Sendable { case cli, vscode, jetbrains }
-
-    let sessionId: String
-    let startTime: Date
-    let source: Source
-    /// Exact totalPremiumRequests (cli) or turn count as proxy (vscode)
-    let credits: Int
-    /// Number of assistant turns in the session
-    let turnCount: Int
-    let modelBreakdown: [String: CopilotModelUsage]
-}
-
-// MARK: - Aggregated summary shown in the UI
-
-struct CopilotUsageSummary: Sendable {
-    let totalCredits: Int
-    /// totalCredits × $0.01
-    let estimatedCost: Double
-    let sessionCount: Int
-    let turnCount: Int
-    /// Sorted descending by creditCost
-    let modelBreakdown: [(model: String, usage: CopilotModelUsage)]
-
-    // Derived from configured allowance / limit
-    var creditAllowanceFraction: Double?   // nil when no allowance set
-    var creditsRemaining: Int?
-    var spendLimitFraction: Double?        // nil when no dollar limit set
-    var dollarRemaining: Double?
-    var overCreditAllowance: Bool { creditAllowanceFraction.map { $0 >= 1.0 } ?? false }
-    var overSpendLimit: Bool { spendLimitFraction.map { $0 >= 1.0 } ?? false }
-}
-
 // MARK: - Copilot plan definitions
 
 enum CopilotPlan: String, CaseIterable, Identifiable, Sendable {

@@ -44,13 +44,17 @@ struct PopoverView: View {
                     }
                 }
             } else {
-                // Copilot content
+                // AI usage content
                 periodPicker
                     .padding(.horizontal, 16)
                     .padding(.top, 10)
 
+                aiProviderPicker
+                    .padding(.horizontal, 16)
+                    .padding(.top, 8)
+
                 ScrollView {
-                    CopilotTabView()
+                    AIUsageTabView(provider: appState.activeAIUsageProvider)
                         .padding(.horizontal, 16)
                         .padding(.vertical, 12)
                 }
@@ -79,7 +83,7 @@ struct PopoverView: View {
     // MARK: - Header
 
     private var header: some View {
-        let isLoading = appState.activeTab == .neon ? appState.isLoading : appState.copilotIsLoading
+        let isLoading = appState.activeTab == .neon ? appState.isLoading : appState.aiUsageIsLoading
         return HStack {
             HStack(spacing: 6) {
                 Image(systemName: "flame.fill")
@@ -93,7 +97,7 @@ struct PopoverView: View {
                 if appState.activeTab == .neon {
                     Task { await appState.refresh() }
                 } else {
-                    Task { await appState.refreshCopilot() }
+                    Task { await appState.refreshAIUsage() }
                 }
             } label: {
                 Image(systemName: "arrow.clockwise")
@@ -131,9 +135,21 @@ struct PopoverView: View {
             .onChange(of: appState.selectedPeriod) {
                 Task {
                     await appState.refresh()
-                    await appState.refreshCopilot()
+                    await appState.refreshAIUsage()
                 }
             }
+    }
+
+    // MARK: - AI Provider Picker
+
+    private var aiProviderPicker: some View {
+        @Bindable var state = appState
+        return Picker("AI Agent", selection: $state.activeAIUsageProvider) {
+            ForEach(AIUsageProvider.allCases) { provider in
+                Text(provider.rawValue).tag(provider)
+            }
+        }
+        .pickerStyle(.segmented)
     }
 }
 
@@ -225,8 +241,10 @@ extension PopoverView {
     // MARK: - Footer
 
     private var footer: some View {
-        HStack {
-            if let error = appState.lastError {
+        let activeError = appState.activeTab == .neon ? appState.lastError : appState.aiUsageError
+        let activeUpdated = appState.activeTab == .neon ? appState.lastUpdated : appState.aiUsageLastUpdated
+        return HStack {
+            if let error = activeError {
                 Image(systemName: "exclamationmark.triangle.fill")
                     .foregroundStyle(.yellow)
                     .font(.system(size: 11))
@@ -235,7 +253,7 @@ extension PopoverView {
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
             } else {
-                if let updated = appState.lastUpdated {
+                if let updated = activeUpdated {
                     Text("Updated \(updated, style: .relative) ago")
                         .font(.system(size: 10))
                         .foregroundStyle(.secondary)

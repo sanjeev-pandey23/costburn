@@ -5,7 +5,7 @@
 
 set -euo pipefail
 
-VERSION="${1:-0.1.0}"
+VERSION="${1:-0.0.9}"
 APP_NAME="CostBurn"
 BINARY_NAME="costburn"
 BUNDLE_ID="com.sanjeevpandey.costburn"
